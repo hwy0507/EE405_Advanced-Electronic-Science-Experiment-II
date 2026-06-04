@@ -62,9 +62,11 @@ class Detection:
 
 @dataclass
 class LogicPuzzle:
+    spec_id: str
     question: str
     answer: str
     equations: list
+    target_value: int
 
 
 # 音频录制
@@ -170,25 +172,188 @@ def classify_fan_zone(center, origin, axis_deg, b_half, a_half, c_half, r_inner,
     return None
 
 
-# 逻辑题 - 每题只有一个变量等于 0
+# 逻辑题 - A/B/C 等于 0 或 1 共六种目标，每种目标 3 道题
+LOGIC_VARS = ("A", "B", "C")
+
+
+@dataclass(frozen=True)
+class LogicPuzzleSpec:
+    spec_id: str
+    answer: str
+    target_value: int
+    values: dict
+    equations: tuple
+
+
 LOGIC_PUZZLES = [
-    {'A': 0, 'B': 1, 'C': 1},
-    {'A': 1, 'B': 0, 'C': 1},
-    {'A': 1, 'B': 1, 'C': 0},
+    LogicPuzzleSpec("A0-1", "A", 0, {"A": 0, "B": 1, "C": 1}, (
+        ("A", "AND", "B", 0),
+        ("A", "OR", "C", 1),
+        ("B", "AND", "C", 1),
+    )),
+    LogicPuzzleSpec("A0-2", "A", 0, {"A": 0, "B": 1, "C": 1}, (
+        ("A", "AND", "C", 0),
+        ("A", "OR", "B", 1),
+        ("B", "AND", "C", 1),
+    )),
+    LogicPuzzleSpec("A0-3", "A", 0, {"A": 0, "B": 1, "C": 1}, (
+        ("A", "AND", "B", 0),
+        ("A", "AND", "C", 0),
+        ("B", "AND", "C", 1),
+    )),
+    LogicPuzzleSpec("A1-1", "A", 1, {"A": 1, "B": 0, "C": 0}, (
+        ("A", "AND", "B", 0),
+        ("A", "OR", "B", 1),
+        ("B", "OR", "C", 0),
+    )),
+    LogicPuzzleSpec("A1-2", "A", 1, {"A": 1, "B": 0, "C": 0}, (
+        ("A", "AND", "C", 0),
+        ("A", "OR", "C", 1),
+        ("B", "OR", "C", 0),
+    )),
+    LogicPuzzleSpec("A1-3", "A", 1, {"A": 1, "B": 0, "C": 0}, (
+        ("A", "OR", "B", 1),
+        ("A", "OR", "C", 1),
+        ("B", "OR", "C", 0),
+    )),
+    LogicPuzzleSpec("B0-1", "B", 0, {"A": 1, "B": 0, "C": 1}, (
+        ("A", "AND", "B", 0),
+        ("A", "AND", "C", 1),
+        ("B", "AND", "C", 0),
+    )),
+    LogicPuzzleSpec("B0-2", "B", 0, {"A": 1, "B": 0, "C": 1}, (
+        ("A", "OR", "B", 1),
+        ("A", "AND", "C", 1),
+        ("B", "AND", "C", 0),
+    )),
+    LogicPuzzleSpec("B0-3", "B", 0, {"A": 1, "B": 0, "C": 1}, (
+        ("A", "AND", "C", 1),
+        ("B", "AND", "C", 0),
+        ("B", "OR", "C", 1),
+    )),
+    LogicPuzzleSpec("B1-1", "B", 1, {"A": 0, "B": 1, "C": 0}, (
+        ("A", "AND", "B", 0),
+        ("A", "OR", "C", 0),
+        ("B", "OR", "C", 1),
+    )),
+    LogicPuzzleSpec("B1-2", "B", 1, {"A": 0, "B": 1, "C": 0}, (
+        ("A", "OR", "B", 1),
+        ("A", "OR", "C", 0),
+        ("B", "AND", "C", 0),
+    )),
+    LogicPuzzleSpec("B1-3", "B", 1, {"A": 0, "B": 1, "C": 0}, (
+        ("A", "AND", "C", 0),
+        ("A", "OR", "C", 0),
+        ("B", "OR", "C", 1),
+    )),
+    LogicPuzzleSpec("C0-1", "C", 0, {"A": 1, "B": 1, "C": 0}, (
+        ("A", "AND", "B", 1),
+        ("A", "AND", "C", 0),
+        ("B", "AND", "C", 0),
+    )),
+    LogicPuzzleSpec("C0-2", "C", 0, {"A": 1, "B": 1, "C": 0}, (
+        ("A", "AND", "B", 1),
+        ("A", "OR", "C", 1),
+        ("B", "AND", "C", 0),
+    )),
+    LogicPuzzleSpec("C0-3", "C", 0, {"A": 1, "B": 1, "C": 0}, (
+        ("A", "AND", "B", 1),
+        ("A", "AND", "C", 0),
+        ("B", "OR", "C", 1),
+    )),
+    LogicPuzzleSpec("C1-1", "C", 1, {"A": 0, "B": 0, "C": 1}, (
+        ("A", "AND", "B", 0),
+        ("A", "OR", "B", 0),
+        ("A", "OR", "C", 1),
+    )),
+    LogicPuzzleSpec("C1-2", "C", 1, {"A": 0, "B": 0, "C": 1}, (
+        ("A", "OR", "B", 0),
+        ("A", "AND", "C", 0),
+        ("B", "OR", "C", 1),
+    )),
+    LogicPuzzleSpec("C1-3", "C", 1, {"A": 0, "B": 0, "C": 1}, (
+        ("A", "OR", "B", 0),
+        ("A", "OR", "C", 1),
+        ("B", "AND", "C", 0),
+    )),
 ]
 
-def generate_logic_puzzle() -> LogicPuzzle:
-    values = random.choice(LOGIC_PUZZLES)
 
-    equations = [
-        f"A AND B = {values['A'] & values['B']}",
-        f"A OR C = {values['A'] | values['C']}",
-        f"B AND C = {values['B'] & values['C']}",
-    ]
+def format_logic_equation(equation) -> str:
+    left, op, right, expected = equation
+    return f"{left} {op} {right} = {expected}"
 
-    answer = next(v for v in ["A", "B", "C"] if values[v] == 0)
 
-    return LogicPuzzle(question="Which equals 0?", answer=answer, equations=equations)
+def eval_logic_equation(values, equation) -> bool:
+    left, op, right, expected = equation
+    if op == "AND":
+        actual = values[left] & values[right]
+    elif op == "OR":
+        actual = values[left] | values[right]
+    else:
+        raise ValueError(f"Unsupported logic operator: {op}")
+    return actual == expected
+
+
+def iter_logic_assignments():
+    for a in (0, 1):
+        for b in (0, 1):
+            for c in (0, 1):
+                yield {"A": a, "B": b, "C": c}
+
+
+def validate_logic_puzzle_bank() -> None:
+    expected_counts = {(var, value): 0 for var in LOGIC_VARS for value in (0, 1)}
+    errors = []
+
+    for puzzle in LOGIC_PUZZLES:
+        if puzzle.answer not in LOGIC_VARS:
+            errors.append(f"{puzzle.spec_id}: invalid answer {puzzle.answer!r}")
+            continue
+        if puzzle.target_value not in (0, 1):
+            errors.append(f"{puzzle.spec_id}: invalid target value {puzzle.target_value!r}")
+            continue
+
+        expected_counts[(puzzle.answer, puzzle.target_value)] += 1
+        solutions = [
+            values for values in iter_logic_assignments()
+            if all(eval_logic_equation(values, equation) for equation in puzzle.equations)
+        ]
+
+        if len(solutions) != 1:
+            errors.append(f"{puzzle.spec_id}: expected 1 solution, got {solutions}")
+            continue
+
+        solution = solutions[0]
+        if solution != puzzle.values:
+            errors.append(f"{puzzle.spec_id}: solution {solution} != declared {puzzle.values}")
+
+        target_vars = [var for var in LOGIC_VARS if solution[var] == puzzle.target_value]
+        if target_vars != [puzzle.answer]:
+            errors.append(
+                f"{puzzle.spec_id}: target {puzzle.target_value} maps to {target_vars}, "
+                f"expected {[puzzle.answer]}"
+            )
+
+    for (answer, target_value), count in sorted(expected_counts.items()):
+        if count != 3:
+            errors.append(f"{answer}={target_value}: expected 3 puzzles, got {count}")
+
+    if errors:
+        raise ValueError("Invalid logic puzzle bank:\n" + "\n".join(errors))
+
+
+validate_logic_puzzle_bank()
+
+
+def make_logic_puzzle(puzzle: LogicPuzzleSpec) -> LogicPuzzle:
+    return LogicPuzzle(
+        spec_id=puzzle.spec_id,
+        question=f"Which equals {puzzle.target_value}?",
+        answer=puzzle.answer,
+        equations=[format_logic_equation(equation) for equation in puzzle.equations],
+        target_value=puzzle.target_value,
+    )
 
 
 # LED
@@ -268,6 +433,7 @@ class CreatureRescueGame(tk.Tk):
         self.animal_word = ""
         self.current_letter_idx = 0
         self.puzzle: Optional[LogicPuzzle] = None
+        self.logic_puzzle_pool = []
         self.score = 0
 
         # 时间记录
@@ -659,7 +825,7 @@ class CreatureRescueGame(tk.Tk):
         self.game_cam_label.pack(pady=10, padx=10, fill=tk.BOTH, expand=True)
         self.word_progress_lbl = tk.Label(cam_card, text="", font=("Consolas", 20, "bold"), fg=ACCENT_GREEN, bg=BG_CARD)
         self.word_progress_lbl.pack(pady=10)
-        self.make_btn(cam_card, "✅ 确认位置", self.on_confirm_position, ACCENT_GREEN, TEXT_PRIMARY, 14, 2).pack(pady=10, padx=20)
+        self.make_btn(cam_card, "✅ 锁定画面", self.on_confirm_position, ACCENT_GREEN, TEXT_PRIMARY, 14, 2).pack(pady=10, padx=20)
 
         info_card = self.make_card(self.content_frame)
         info_card.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(10, 0))
@@ -696,12 +862,19 @@ class CreatureRescueGame(tk.Tk):
         letter = self.animal_word[0]
         color = self.color_result if self.color_result else "green"
         led_show_letter(letter, color)
+        self.reset_logic_puzzle_pool()
         self.generate_new_puzzle()
         self.start_shrink_timer()
         self.update_word_display()
 
+    def reset_logic_puzzle_pool(self):
+        self.logic_puzzle_pool = list(LOGIC_PUZZLES)
+        random.shuffle(self.logic_puzzle_pool)
+
     def generate_new_puzzle(self):
-        self.puzzle = generate_logic_puzzle()
+        if not self.logic_puzzle_pool:
+            self.reset_logic_puzzle_pool()
+        self.puzzle = make_logic_puzzle(self.logic_puzzle_pool.pop())
         eq_text = "\n".join(self.puzzle.equations)
         self.puzzle_lbl.config(text=f"{eq_text}\n\n{self.puzzle.question}")
         self.target_zone_lbl.config(text="目标扇形: ???")
@@ -740,12 +913,40 @@ class CreatureRescueGame(tk.Tk):
         else:
             self.on_game_over()
 
+    def detect_locked_zone(self) -> Tuple[Optional[str], Optional[str]]:
+        """Re-detect the red block on the latest frame when the player locks position."""
+        if self.last_frame is None:
+            return None, "未获取到画面"
+        if not self.calibrated or self.fan_origin is None:
+            return None, "尚未完成标定"
+
+        center, _ = detect_red_center(self.last_frame)
+        if center is None:
+            self.fan_current_zone = None
+            if hasattr(self, 'current_zone_lbl') and self.current_zone_lbl.winfo_exists():
+                self.current_zone_lbl.config(text="当前扇形: 未检测到")
+            return None, "未检测到红色方块"
+
+        zone = classify_fan_zone(center, self.fan_origin, self.fan_axis,
+                                 self.fan_b_half, self.fan_a_half, self.fan_c_half,
+                                 self.fan_r_inner, self.fan_r_outer)
+        self.fan_current_zone = zone
+        if hasattr(self, 'current_zone_lbl') and self.current_zone_lbl.winfo_exists():
+            self.current_zone_lbl.config(text=f"当前扇形: {zone if zone else '外'}")
+        if zone is None:
+            return None, "红色方块不在A/B/C扇形内"
+        return zone, None
+
     def on_confirm_position(self):
         """玩家确认位置后检查是否正确"""
         if self.puzzle is None:
             return
 
-        zone = self.fan_current_zone
+        zone, error = self.detect_locked_zone()
+        if error:
+            self.status_bar.config(text=f"❌ {error}")
+            return
+
         if zone == self.puzzle.answer:
             # 答对了
             self.score += 10
@@ -765,7 +966,7 @@ class CreatureRescueGame(tk.Tk):
                 self.generate_new_puzzle()
                 self.update_word_display()
                 self.start_shrink_timer()
-                self.status_bar.config(text=f"正确！继续下一个字母")
+                self.status_bar.config(text=f"正确！继续下一个题目（剩余题目: {len(self.logic_puzzle_pool)}）")
         else:
             # 答错了
             self.status_bar.config(text=f"❌ 错误！当前扇形: {zone or '外'}, 请重新选择")
@@ -837,6 +1038,8 @@ class CreatureRescueGame(tk.Tk):
         self.game_start_time = None
         self.calibrated = False
         self.puzzle = None
+        self.logic_puzzle_pool = []
+        self.fan_current_zone = None
         self.fan_b_half = 22.0
         self.fan_a_half = 22.0
         self.fan_c_half = 22.0
