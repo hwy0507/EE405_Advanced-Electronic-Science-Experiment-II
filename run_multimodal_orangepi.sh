@@ -5,8 +5,8 @@ cd "$(dirname "$0")"
 
 echo "[INFO] Working dir: $(pwd)"
 
-if [ ! -f "multimodal_rescue_gui_orangepi.py" ]; then
-  echo "[ERROR] missing multimodal_rescue_gui_orangepi.py"
+if [ ! -f "creature_rescue_game.py" ]; then
+  echo "[ERROR] missing creature_rescue_game.py"
   exit 1
 fi
 
@@ -15,10 +15,12 @@ if [ ! -f "speech_color.py" ]; then
   exit 1
 fi
 
-MODEL_DEFAULT=""
-LABELS_DEFAULT=""
+MODEL_DEFAULT="model_artifacts/deploy_pack_20260507/animals17_best.onnx"
+LABELS_DEFAULT="model_artifacts/deploy_pack_20260507/labels.txt"
 
-if [ -f "$HOME/animal_yolo_demo/models/animals17_best.onnx" ] && [ -f "$HOME/animal_yolo_demo/models/labels.txt" ]; then
+if [ -f "$MODEL_DEFAULT" ] && [ -f "$LABELS_DEFAULT" ]; then
+  :
+elif [ -f "$HOME/animal_yolo_demo/models/animals17_best.onnx" ] && [ -f "$HOME/animal_yolo_demo/models/labels.txt" ]; then
   MODEL_DEFAULT="$HOME/animal_yolo_demo/models/animals17_best.onnx"
   LABELS_DEFAULT="$HOME/animal_yolo_demo/models/labels.txt"
 elif [ -f "$HOME/animal_demo/models/animals17_best.onnx" ] && [ -f "$HOME/animal_demo/models/labels.txt" ]; then
@@ -38,8 +40,7 @@ if [ ! -f "$LABELS_DEFAULT" ]; then
   echo "       pass --yolo-labels manually"
 fi
 
-python3 multimodal_rescue_gui_orangepi.py \
-  --device /dev/video0 \
+python3 creature_rescue_game.py \
   --yolo-model "$MODEL_DEFAULT" \
   --yolo-labels "$LABELS_DEFAULT" \
   "$@"

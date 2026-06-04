@@ -79,6 +79,9 @@ class AudioRecorder:
         self._stream = None
 
     def start(self):
+        if sd is None:
+            raise RuntimeError("sounddevice 未安装，无法录音")
+
         def callback(indata, frames, t, status):
             with self._lock:
                 self._chunks.append(bytes(indata))
@@ -96,6 +99,180 @@ class AudioRecorder:
             data = b"".join(self._chunks)
             self._chunks = []
         return data, self.rate
+
+
+def is_auto_device(value) -> bool:
+    return value is None or str(value).strip().lower() in ("", "auto")
+
+
+def append_unique_device(candidates, value) -> None:
+    key = (type(value).__name__, str(value))
+    if all((type(existing).__name__, str(existing)) != key for existing in candidates):
+        candidates.append(value)
+
+
+def camera_label(device) -> str:
+    return str(device)
+
+
+def create_camera_capture(device, width: int, height: int):
+    if device is None:
+        return None
+
+    text = str(device).strip()
+    attempts = []
+    if text.startswith("/dev/"):
+        attempts.append((text, cv2.CAP_V4L2))
+        attempts.append((text, None))
+    else:
+        try:
+            attempts.append((int(text), None))
+        except ValueError:
+            attempts.append((text, None))
+
+    for source, backend in attempts:
+        cap = cv2.VideoCapture(source, backend) if backend is not None else cv2.VideoCapture(source)
+        if not cap or not cap.isOpened():
+            if cap:
+                cap.release()
+            continue
+
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+        cap.set(cv2.CAP_PROP_FPS, 30)
+        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
+        return cap
+
+    return None
+
+
+def camera_can_read(device, width: int, height: int) -> bool:
+    cap = create_camera_capture(device, width, height)
+    if cap is None:
+        return False
+    try:
+        for _ in range(6):
+            ok, frame = cap.read()
+            if ok and frame is not None and frame.size > 0:
+                return True
+            time.sleep(0.03)
+        return False
+    finally:
+        cap.release()
+
+
+def discover_camera_candidates(explicit_device):
+    candidates = []
+    if not is_auto_device(explicit_device):
+        append_unique_device(candidates, explicit_device)
+
+    video_paths = sorted(
+        Path("/dev").glob("video*"),
+        key=lambda p: int(p.name[5:]) if p.name[5:].isdigit() else 999,
+    )
+    for path in video_paths:
+        append_unique_device(candidates, str(path))
+
+    for idx in range(6):
+        append_unique_device(candidates, str(idx))
+
+    return candidates
+
+
+def resolve_camera_device(requested_device, width: int, height: int):
+    requested_auto = is_auto_device(requested_device)
+    for candidate in discover_camera_candidates(requested_device):
+        if camera_can_read(candidate, width, height):
+            if requested_auto:
+                return candidate, f"摄像头: 自动选择 {camera_label(candidate)}"
+            if str(candidate) == str(requested_device):
+                return candidate, f"摄像头: 使用指定设备 {camera_label(candidate)}"
+            return candidate, f"摄像头: 指定设备不可用，自动改用 {camera_label(candidate)}"
+
+    if requested_auto:
+        return None, "摄像头: 未找到可用设备"
+    return None, f"摄像头: 指定设备 {requested_device} 不可用，且未找到可用替代设备"
+
+
+def audio_label(device) -> str:
+    if sd is None:
+        return str(device)
+    if device is None:
+        return "系统默认输入"
+    try:
+        info = sd.query_devices(device)
+        return f"{device} ({info.get('name', 'unknown')})"
+    except Exception:
+        return str(device)
+
+
+def audio_can_open(device, sample_rate: int) -> bool:
+    if sd is None:
+        return False
+    stream = None
+    try:
+        stream = sd.RawInputStream(samplerate=sample_rate, blocksize=4000, device=device,
+                                   dtype="int16", channels=1)
+        stream.start()
+        time.sleep(0.05)
+        stream.stop()
+        return True
+    except Exception:
+        return False
+    finally:
+        if stream is not None:
+            try:
+                stream.close()
+            except Exception:
+                pass
+
+
+def discover_audio_candidates(explicit_device):
+    candidates = []
+    if not is_auto_device(explicit_device):
+        append_unique_device(candidates, explicit_device)
+
+    if sd is None:
+        return candidates
+
+    try:
+        default_device = sd.default.device
+        default_input = default_device[0] if isinstance(default_device, (list, tuple)) else default_device
+        if isinstance(default_input, int) and default_input >= 0:
+            append_unique_device(candidates, default_input)
+    except Exception:
+        pass
+
+    try:
+        for idx, info in enumerate(sd.query_devices()):
+            if int(info.get("max_input_channels", 0)) > 0:
+                append_unique_device(candidates, idx)
+    except Exception:
+        pass
+
+    append_unique_device(candidates, None)
+    return candidates
+
+
+def resolve_audio_device(requested_device, sample_rate: int):
+    if sd is None:
+        if is_auto_device(requested_device):
+            return None, "麦克风: sounddevice 未安装，无法自动探测"
+        return requested_device, f"麦克风: sounddevice 未安装，保留指定设备 {requested_device}"
+
+    requested_auto = is_auto_device(requested_device)
+    for candidate in discover_audio_candidates(requested_device):
+        if audio_can_open(candidate, sample_rate):
+            if requested_auto:
+                return candidate, f"麦克风: 自动选择 {audio_label(candidate)}"
+            if str(candidate) == str(requested_device):
+                return candidate, f"麦克风: 使用指定设备 {audio_label(candidate)}"
+            return candidate, f"麦克风: 指定设备不可用，自动改用 {audio_label(candidate)}"
+
+    if requested_auto:
+        return None, "麦克风: 未找到可用输入设备"
+    return None, f"麦克风: 指定设备 {requested_device} 不可用，且未找到可用替代设备"
 
 
 # 语音识别
@@ -416,11 +593,12 @@ class CreatureRescueGame(tk.Tk):
     def __init__(self, args):
         super().__init__()
 
-        self.camera_device = args.device
         self.cam_w = args.width
         self.cam_h = args.height
-        self.audio_device = args.audio_device
         self.audio_rate = args.audio_rate
+        self.camera_device, camera_status = resolve_camera_device(args.device, self.cam_w, self.cam_h)
+        self.audio_device, audio_status = resolve_audio_device(args.audio_device, self.audio_rate)
+        self.device_status = f"{camera_status}；{audio_status}"
         self.vosk_model = args.vosk_model
         self.yolo_model = args.yolo_model
         self.yolo_labels = args.yolo_labels
@@ -531,17 +709,14 @@ class CreatureRescueGame(tk.Tk):
         if label_widget is None or not label_widget.winfo_exists():
             return
 
-        try:
-            self.cap = cv2.VideoCapture(self.camera_device, cv2.CAP_V4L2)
-            if not self.cap.isOpened():
-                self.cap = cv2.VideoCapture(int(self.camera_device))
+        if self.camera_device is None:
+            label_widget.config(text="未找到可用摄像头")
+            return
 
-            if self.cap.isOpened():
-                self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.cam_w)
-                self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.cam_h)
-                self.cap.set(cv2.CAP_PROP_FPS, 30)
-                self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-                self.cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
+        try:
+            self.cap = create_camera_capture(self.camera_device, self.cam_w, self.cam_h)
+
+            if self.cap is not None and self.cap.isOpened():
                 self.camera_running = True
                 self._camera_loop()
             else:
@@ -637,6 +812,8 @@ class CreatureRescueGame(tk.Tk):
         tk.Label(card, text="🎮", font=("Arial", 60), fg=ACCENT_GREEN, bg=BG_CARD).pack(pady=20)
         tk.Label(card, text="生灵解救协议", font=("Microsoft YaHei", 28, "bold"), fg=TEXT_PRIMARY, bg=BG_CARD).pack(pady=10)
         tk.Label(card, text="通过语音、视觉和操控三位一体，解救被困的生灵", font=("Microsoft YaHei", 14), fg=TEXT_SECONDARY, bg=BG_CARD).pack(pady=5)
+        tk.Label(card, text=self.device_status, font=("Microsoft YaHei", 11), fg=TEXT_SECONDARY, bg=BG_CARD,
+                 wraplength=780).pack(pady=8, padx=30)
         self.make_btn(card, "▶ 开始游戏", lambda: self.show_step(1), ACCENT_GREEN, TEXT_PRIMARY, 16, 3).pack(pady=30, padx=50)
 
     # 语音关卡
@@ -1060,10 +1237,10 @@ class CreatureRescueGame(tk.Tk):
 
 def parse_args():
     ap = argparse.ArgumentParser(description="生灵解救协议")
-    ap.add_argument("--device", default="/dev/video1")
+    ap.add_argument("--device", default="auto", help="摄像头设备，如 /dev/video0；默认 auto 自动探测")
     ap.add_argument("--width", type=int, default=640)
     ap.add_argument("--height", type=int, default=480)
-    ap.add_argument("--audio-device", default=None)
+    ap.add_argument("--audio-device", default="auto", help="麦克风输入设备；默认 auto 自动探测")
     ap.add_argument("--audio-rate", type=int, default=16000)
     ap.add_argument("--vosk-model", default=None)
     ap.add_argument("--yolo-model", default="model_artifacts/deploy_pack_20260507/animals17_best.onnx")

@@ -207,20 +207,26 @@ unzip vosk-model-small-cn-0.22.zip
 cd ~/20260603
 
 python3 creature_rescue_game.py \
-  --device /dev/video1 \
-  --audio-device "hw:3" \
   --vosk-model ./vosk-model-small-cn-0.22 \
   --yolo-model model_artifacts/deploy_pack_20260507/animals17_best.onnx \
   --yolo-labels model_artifacts/deploy_pack_20260507/labels.txt \
   --yolo-conf 0.35
 ```
 
+程序默认会自动搜索摄像头和麦克风：摄像头必须能成功读出画面，麦克风必须能成功打开输入流。启动页会显示最终选择的设备。
+
+如果需要手动指定设备，可以追加参数：
+
+```bash
+python3 creature_rescue_game.py --device /dev/video1 --audio-device "hw:3"
+```
+
 ### 参数说明
 
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
-| `--device` | /dev/video1 | 摄像头设备号 |
-| `--audio-device` | hw:3 | 麦克风设备号 |
+| `--device` | auto | 摄像头设备号；默认自动探测 |
+| `--audio-device` | auto | 麦克风输入设备；默认自动探测 |
 | `--vosk-model` | ./vosk-model-small-cn-0.22 | Vosk模型路径 |
 | `--width` | 640 | 摄像头分辨率宽度 |
 | `--height` | 480 | 摄像头分辨率高度 |
@@ -330,8 +336,10 @@ python3 abc_red_zone_test.py --device /dev/video1 --auto-calib
 
 ### Q1: 摄像头打不开
 ```bash
-# 检查设备权限
-ls -la /dev/video1
+# 查看程序启动页自动选择的摄像头，必要时手动指定
+ls -la /dev/video*
+python3 creature_rescue_game.py --device /dev/video0
+
 # 如果没有权限，添加用户组
 sudo usermod -a -G video orangepi
 # 然后重新登录
@@ -339,8 +347,9 @@ sudo usermod -a -G video orangepi
 
 ### Q2: 语音识别失败
 ```bash
-# 检查麦克风设备号是否正确
+# 查看程序启动页自动选择的麦克风，必要时手动指定
 arecord -l
+python3 creature_rescue_game.py --audio-device "hw:3"
 
 # 确认模型文件存在
 ls -la vosk-model-small-cn-0.22/
