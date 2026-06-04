@@ -1,0 +1,22 @@
+names:
+  0: Tiger
+  1: Lion
+  2: Panda
+  3: Rabbit
+  4: Monkey
+  5: Deer
+  6: Fox
+  7: Cat
+  8: Dog
+  9: Bear
+  10: Elephant
+  11: Horse
+  12: Sheep
+  13: Cattle
+  14: Zebra
+  15: Giraffe
+  16: Bird
+path: /root/autodl-tmp/animal_train_4090/datasets/openimages_animals_yolo
+test: ./images/test/
+train: ./images/train/
+val: ./images/val/

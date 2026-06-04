@@ -1,0 +1,17 @@
+Tiger
+Lion
+Panda
+Rabbit
+Monkey
+Deer
+Fox
+Cat
+Dog
+Bear
+Elephant
+Horse
+Sheep
+Cattle
+Zebra
+Giraffe
+Bird

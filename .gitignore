@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Local editor and OS files
+.DS_Store
+.vscode/
+*.swp
+*.swo
+*~
+
+# Local configuration
+.env
+*.local
+
+# Generated/native build artifacts
+*.so
+*.c
+
+# Training/sample assets not needed at runtime
+samples_animals17_3each/
+samples_animals17_3each.tar.gz
+train_yolo_animals_pkg/
+yolov5n.pt
