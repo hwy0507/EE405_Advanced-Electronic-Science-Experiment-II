@@ -221,6 +221,12 @@ python3 creature_rescue_game.py \
 python3 creature_rescue_game.py --device /dev/video1 --audio-device "hw:3"
 ```
 
+如果在 NoMachine 里看不到底部按钮，可以调小窗口高度：
+
+```bash
+python3 creature_rescue_game.py --window-width 1024 --window-height 650
+```
+
 ### 参数说明
 
 | 参数 | 默认值 | 说明 |
@@ -230,6 +236,8 @@ python3 creature_rescue_game.py --device /dev/video1 --audio-device "hw:3"
 | `--vosk-model` | ./vosk-model-small-cn-0.22 | Vosk模型路径 |
 | `--width` | 640 | 摄像头分辨率宽度 |
 | `--height` | 480 | 摄像头分辨率高度 |
+| `--window-width` | 1180 | 程序窗口宽度 |
+| `--window-height` | 720 | 程序窗口高度 |
 
 ### 启动脚本
 

@@ -51,6 +51,10 @@ ACCENT_YELLOW = "#d29922"
 ACCENT_PURPLE = "#a371f7"
 TEXT_PRIMARY = "#f0f6fc"
 TEXT_SECONDARY = "#8b949e"
+DEFAULT_WINDOW_WIDTH = 1180
+DEFAULT_WINDOW_HEIGHT = 720
+MIN_WINDOW_WIDTH = 960
+MIN_WINDOW_HEIGHT = 600
 
 
 @dataclass
@@ -588,6 +592,26 @@ def draw_fan_zones(frame, origin, axis_deg, b_half, a_half, c_half, r_inner, r_o
     return frame
 
 
+def fit_image_to_widget(image: Image.Image, widget, fallback_size=(700, 500)) -> Image.Image:
+    """Resize a camera frame to the available widget area while preserving aspect ratio."""
+    max_w = widget.winfo_width()
+    max_h = widget.winfo_height()
+    if max_w <= 1 or max_h <= 1:
+        max_w, max_h = fallback_size
+
+    src_w, src_h = image.size
+    if src_w <= 0 or src_h <= 0:
+        return image
+
+    scale = min(max_w / src_w, max_h / src_h)
+    if scale <= 0:
+        scale = 1.0
+
+    out_w = max(120, int(src_w * scale))
+    out_h = max(90, int(src_h * scale))
+    return image.resize((out_w, out_h))
+
+
 # 游戏主类
 class CreatureRescueGame(tk.Tk):
     def __init__(self, args):
@@ -603,6 +627,8 @@ class CreatureRescueGame(tk.Tk):
         self.yolo_model = args.yolo_model
         self.yolo_labels = args.yolo_labels
         self.yolo_conf = args.yolo_conf
+        self.window_width = args.window_width
+        self.window_height = args.window_height
 
         # 游戏状态
         self.game_step = 0
@@ -648,7 +674,8 @@ class CreatureRescueGame(tk.Tk):
         self.active_cam_label = None
 
         self.title("生灵解救协议")
-        self.geometry("1280x800")
+        self.geometry(f"{self.window_width}x{self.window_height}")
+        self.minsize(MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT)
         self.configure(bg=BG_DARK)
 
         self._build_ui()
@@ -745,7 +772,7 @@ class CreatureRescueGame(tk.Tk):
                                            self.fan_r_inner, self.fan_r_outer, self.fan_current_zone)
 
                     rgb = cv2.cvtColor(vis, cv2.COLOR_BGR2RGB)
-                    img = Image.fromarray(rgb).resize((700, 500))
+                    img = fit_image_to_widget(Image.fromarray(rgb), self.active_cam_label)
                     tk_img = ImageTk.PhotoImage(img)
                     self.active_cam_label.imglabel = tk_img
                     self.active_cam_label.config(image=tk_img, text="")
@@ -880,10 +907,16 @@ class CreatureRescueGame(tk.Tk):
     def _show_animal_screen(self):
         cam_card = self.make_card(self.content_frame)
         cam_card.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
-        tk.Label(cam_card, text="📷 第二关：动物识别", font=("Microsoft YaHei", 18, "bold"), fg=ACCENT_GREEN, bg=BG_CARD).pack(pady=10)
+
+        animal_toolbar = tk.Frame(cam_card, bg=BG_CARD)
+        animal_toolbar.pack(fill=tk.X, padx=10, pady=10)
+        tk.Label(animal_toolbar, text="📷 第二关：动物识别", font=("Microsoft YaHei", 18, "bold"),
+                 fg=ACCENT_GREEN, bg=BG_CARD).pack(side=tk.LEFT)
+        self.make_btn(animal_toolbar, "📸 识别此画面", self.on_capture_animal,
+                      ACCENT_GREEN, TEXT_PRIMARY, 12, 1).pack(side=tk.RIGHT)
+
         self.cam_label = tk.Label(cam_card, text="摄像头启动中...", font=("Microsoft YaHei", 14), fg=TEXT_SECONDARY, bg="#0d1117")
-        self.cam_label.pack(pady=10, padx=10, fill=tk.BOTH, expand=True)
-        self.make_btn(cam_card, "📸 识别此画面", self.on_capture_animal, ACCENT_GREEN, TEXT_PRIMARY, 14, 2).pack(pady=10, padx=20)
+        self.cam_label.pack(pady=(0, 10), padx=10, fill=tk.BOTH, expand=True)
 
         info_card = self.make_card(self.content_frame)
         info_card.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(10, 0))
@@ -1240,6 +1273,8 @@ def parse_args():
     ap.add_argument("--device", default="auto", help="摄像头设备，如 /dev/video0；默认 auto 自动探测")
     ap.add_argument("--width", type=int, default=640)
     ap.add_argument("--height", type=int, default=480)
+    ap.add_argument("--window-width", type=int, default=DEFAULT_WINDOW_WIDTH)
+    ap.add_argument("--window-height", type=int, default=DEFAULT_WINDOW_HEIGHT)
     ap.add_argument("--audio-device", default="auto", help="麦克风输入设备；默认 auto 自动探测")
     ap.add_argument("--audio-rate", type=int, default=16000)
     ap.add_argument("--vosk-model", default=None)
