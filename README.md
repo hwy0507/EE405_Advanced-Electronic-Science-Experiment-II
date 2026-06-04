@@ -376,7 +376,7 @@ ls -la /dev/spidev*
 # 主程序会在状态栏显示LED错误。若提示Permission denied，说明SPI没有权限：
 sudo chmod 666 /dev/spidev1.0
 
-# 若提示sudo需要密码，可以先在终端确认免密sudo是否可用：
+# sudo -n 不会弹出密码输入；若提示需要密码，说明主程序不能自动提权
 sudo -n python3 ws2812_letters_spi.py --text "A" --color green --layout col --rotate 0 --flip-x
 
 # 检查接线（DIN接PH7/GND共地/5V外接电源）
