@@ -293,16 +293,18 @@ if ok:
 
 ```bash
 # 显示单个字母
+python3 ws2812_letters_spi.py --text "A" --color green --layout col --rotate 0 --flip-x
+# 如果提示没有权限，再使用：
 sudo python3 ws2812_letters_spi.py --text "A" --color green --layout col --rotate 0 --flip-x
 
 # 显示ZEBRA
 for letter in Z E B R A; do
-  sudo python3 ws2812_letters_spi.py --text "$letter" --color green --layout col --rotate 0 --flip-x
+  python3 ws2812_letters_spi.py --text "$letter" --color green --layout col --rotate 0 --flip-x
   sleep 2
 done
 
 # 关灯
-sudo python3 ws2812_letters_spi.py --text " " --color "#000000"
+python3 ws2812_letters_spi.py --text " " --color "#000000"
 ```
 
 ### 4. 测试ABC扇形追踪
@@ -371,8 +373,11 @@ arecord -d 3 -D plughw:3 -f cd /tmp/test.wav
 # 检查SPI设备
 ls -la /dev/spidev*
 
-# 如果没有SPI权限
+# 主程序会在状态栏显示LED错误。若提示Permission denied，说明SPI没有权限：
 sudo chmod 666 /dev/spidev1.0
+
+# 若提示sudo需要密码，可以先在终端确认免密sudo是否可用：
+sudo -n python3 ws2812_letters_spi.py --text "A" --color green --layout col --rotate 0 --flip-x
 
 # 检查接线（DIN接PH7/GND共地/5V外接电源）
 ```

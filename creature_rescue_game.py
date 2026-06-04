@@ -51,6 +51,7 @@ ACCENT_YELLOW = "#d29922"
 ACCENT_PURPLE = "#a371f7"
 TEXT_PRIMARY = "#f0f6fc"
 TEXT_SECONDARY = "#8b949e"
+CAMERA_VIEW_SIZE = (700, 500)
 DEFAULT_WINDOW_WIDTH = 1180
 DEFAULT_WINDOW_HEIGHT = 720
 MIN_WINDOW_WIDTH = 960
@@ -538,16 +539,44 @@ def make_logic_puzzle(puzzle: LogicPuzzleSpec) -> LogicPuzzle:
 
 
 # LED
-def led_show_letter(letter: str, color: str = "green") -> None:
-    cmd = ["sudo", "python3", "ws2812_letters_spi.py", "--text", letter, "--color", color,
+def run_led_command(args) -> Tuple[bool, str]:
+    script_path = Path(__file__).with_name("ws2812_letters_spi.py")
+    base_cmd = [sys.executable, str(script_path)] + args
+    commands = [
+        base_cmd,
+        ["sudo", "-n"] + base_cmd,
+    ]
+    errors = []
+
+    for cmd in commands:
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+        except FileNotFoundError as exc:
+            errors.append(f"{cmd[0]} not found: {exc}")
+            continue
+        except subprocess.TimeoutExpired:
+            errors.append(" ".join(cmd[:3]) + " timed out")
+            continue
+
+        if result.returncode == 0:
+            return True, ""
+
+        stderr = (result.stderr or result.stdout or "").strip()
+        errors.append(stderr or f"{' '.join(cmd[:3])} exited with {result.returncode}")
+
+    return False, " | ".join(errors)[-220:]
+
+
+def led_show_letter(letter: str, color: str = "green") -> Tuple[bool, str]:
+    cmd = ["--text", letter, "--color", color,
            "--layout", LED_CONFIG["layout"], "--rotate", LED_CONFIG["rotate"], "--brightness", LED_CONFIG["brightness"]]
     if LED_CONFIG["flip_x"]:
         cmd.append("--flip-x")
-    subprocess.run(cmd, capture_output=True)
+    return run_led_command(cmd)
 
 
-def led_clear() -> None:
-    subprocess.run(["sudo", "python3", "ws2812_letters_spi.py", "--text", " ", "--color", "#000000"], capture_output=True)
+def led_clear() -> Tuple[bool, str]:
+    return run_led_command(["--text", " ", "--color", "#000000"])
 
 
 # 动物检测
@@ -592,24 +621,23 @@ def draw_fan_zones(frame, origin, axis_deg, b_half, a_half, c_half, r_inner, r_o
     return frame
 
 
-def fit_image_to_widget(image: Image.Image, widget, fallback_size=(700, 500)) -> Image.Image:
-    """Resize a camera frame to the available widget area while preserving aspect ratio."""
-    max_w = widget.winfo_width()
-    max_h = widget.winfo_height()
-    if max_w <= 1 or max_h <= 1:
-        max_w, max_h = fallback_size
-
+def fit_image_to_canvas(image: Image.Image, canvas_size=CAMERA_VIEW_SIZE) -> Image.Image:
+    """Render a camera frame into a fixed-size letterboxed canvas."""
+    max_w, max_h = canvas_size
     src_w, src_h = image.size
     if src_w <= 0 or src_h <= 0:
-        return image
+        return Image.new("RGB", canvas_size, "#0d1117")
 
     scale = min(max_w / src_w, max_h / src_h)
     if scale <= 0:
         scale = 1.0
 
-    out_w = max(120, int(src_w * scale))
-    out_h = max(90, int(src_h * scale))
-    return image.resize((out_w, out_h))
+    out_w = max(1, int(src_w * scale))
+    out_h = max(1, int(src_h * scale))
+    resized = image.resize((out_w, out_h))
+    canvas = Image.new("RGB", canvas_size, "#0d1117")
+    canvas.paste(resized, ((max_w - out_w) // 2, (max_h - out_h) // 2))
+    return canvas
 
 
 # 游戏主类
@@ -772,7 +800,7 @@ class CreatureRescueGame(tk.Tk):
                                            self.fan_r_inner, self.fan_r_outer, self.fan_current_zone)
 
                     rgb = cv2.cvtColor(vis, cv2.COLOR_BGR2RGB)
-                    img = fit_image_to_widget(Image.fromarray(rgb), self.active_cam_label)
+                    img = fit_image_to_canvas(Image.fromarray(rgb))
                     tk_img = ImageTk.PhotoImage(img)
                     self.active_cam_label.imglabel = tk_img
                     self.active_cam_label.config(image=tk_img, text="")
@@ -984,8 +1012,12 @@ class CreatureRescueGame(tk.Tk):
         cam_card = self.make_card(self.content_frame)
         cam_card.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
         tk.Label(cam_card, text="🎯 第三关：云台标定", font=("Microsoft YaHei", 18, "bold"), fg=ACCENT_PURPLE, bg=BG_CARD).pack(pady=10)
-        self.calib_cam_label = tk.Label(cam_card, text="请将云台红色方块移到画面中央", font=("Microsoft YaHei", 14), fg=TEXT_SECONDARY, bg="#0d1117")
-        self.calib_cam_label.pack(pady=10, padx=10, fill=tk.BOTH, expand=True)
+        calib_cam_frame = tk.Frame(cam_card, width=CAMERA_VIEW_SIZE[0], height=CAMERA_VIEW_SIZE[1], bg="#0d1117")
+        calib_cam_frame.pack(pady=10, padx=10)
+        calib_cam_frame.pack_propagate(False)
+        self.calib_cam_label = tk.Label(calib_cam_frame, text="请将云台红色方块移到画面中央",
+                                        font=("Microsoft YaHei", 14), fg=TEXT_SECONDARY, bg="#0d1117")
+        self.calib_cam_label.pack(fill=tk.BOTH, expand=True)
         self.calib_status_lbl = tk.Label(cam_card, text="等待标定...", font=("Microsoft YaHei", 14), fg=TEXT_SECONDARY, bg=BG_CARD)
         self.calib_status_lbl.pack(pady=5)
         self.make_btn(cam_card, "🎯 标定此位置", self.on_calibrate, ACCENT_PURPLE, TEXT_PRIMARY, 14, 2).pack(pady=10, padx=20)
@@ -1031,8 +1063,12 @@ class CreatureRescueGame(tk.Tk):
         cam_card = self.make_card(self.content_frame)
         cam_card.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
         tk.Label(cam_card, text="🎮 游戏进行中", font=("Microsoft YaHei", 18, "bold"), fg=ACCENT_YELLOW, bg=BG_CARD).pack(pady=10)
-        self.game_cam_label = tk.Label(cam_card, text="游戏画面", font=("Microsoft YaHei", 14), fg=TEXT_SECONDARY, bg="#0d1117")
-        self.game_cam_label.pack(pady=10, padx=10, fill=tk.BOTH, expand=True)
+        game_cam_frame = tk.Frame(cam_card, width=CAMERA_VIEW_SIZE[0], height=CAMERA_VIEW_SIZE[1], bg="#0d1117")
+        game_cam_frame.pack(pady=10, padx=10)
+        game_cam_frame.pack_propagate(False)
+        self.game_cam_label = tk.Label(game_cam_frame, text="游戏画面", font=("Microsoft YaHei", 14),
+                                       fg=TEXT_SECONDARY, bg="#0d1117")
+        self.game_cam_label.pack(fill=tk.BOTH, expand=True)
         self.word_progress_lbl = tk.Label(cam_card, text="", font=("Consolas", 20, "bold"), fg=ACCENT_GREEN, bg=BG_CARD)
         self.word_progress_lbl.pack(pady=10)
         self.make_btn(cam_card, "✅ 锁定画面", self.on_confirm_position, ACCENT_GREEN, TEXT_PRIMARY, 14, 2).pack(pady=10, padx=20)
@@ -1071,11 +1107,15 @@ class CreatureRescueGame(tk.Tk):
     def start_game_logic(self):
         letter = self.animal_word[0]
         color = self.color_result if self.color_result else "green"
-        led_show_letter(letter, color)
+        led_ok, led_msg = led_show_letter(letter, color)
         self.reset_logic_puzzle_pool()
         self.generate_new_puzzle()
         self.start_shrink_timer()
         self.update_word_display()
+        if led_ok:
+            self.status_bar.config(text=f"LED显示字母 {letter}，请完成逻辑题")
+        else:
+            self.status_bar.config(text=f"LED启动失败：{led_msg}")
 
     def reset_logic_puzzle_pool(self):
         self.logic_puzzle_pool = list(LOGIC_PUZZLES)
@@ -1172,11 +1212,14 @@ class CreatureRescueGame(tk.Tk):
             else:
                 letter = self.animal_word[self.current_letter_idx]
                 color = self.color_result if self.color_result else "green"
-                led_show_letter(letter, color)
+                led_ok, led_msg = led_show_letter(letter, color)
                 self.generate_new_puzzle()
                 self.update_word_display()
                 self.start_shrink_timer()
-                self.status_bar.config(text=f"正确！继续下一个题目（剩余题目: {len(self.logic_puzzle_pool)}）")
+                if led_ok:
+                    self.status_bar.config(text=f"正确！LED显示字母 {letter}（剩余题目: {len(self.logic_puzzle_pool)}）")
+                else:
+                    self.status_bar.config(text=f"正确，但LED失败：{led_msg}")
         else:
             # 答错了
             self.status_bar.config(text=f"❌ 错误！当前扇形: {zone or '外'}, 请重新选择")
