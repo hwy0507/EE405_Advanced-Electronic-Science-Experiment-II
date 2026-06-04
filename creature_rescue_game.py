@@ -170,27 +170,15 @@ def classify_fan_zone(center, origin, axis_deg, b_half, a_half, c_half, r_inner,
     return None
 
 
-# 逻辑题 - 题库
+# 逻辑题 - 每题只有一个变量等于 0
 LOGIC_PUZZLES = [
-    # 格式: (题目描述, 方程列表生成函数)
-    ("A AND B = 0\nA OR C = 1\nWhich equals 0?", lambda v: v.update({'A': 0, 'B': 1, 'C': 1}) or None),
-    ("B AND C = 0\nA OR B = 1\nWhich equals 0?", lambda v: v.update({'A': 1, 'B': 0, 'C': 1}) or None),
-    ("A OR B = 1\nB AND C = 0\nWhich equals 0?", lambda v: v.update({'A': 1, 'B': 0, 'C': 0}) or None),
-    ("A AND C = 1\nB OR C = 0\nWhich equals 0?", lambda v: v.update({'A': 1, 'B': 0, 'C': 1}) or None),
-    ("A OR C = 0\nB AND C = 1\nWhich equals 0?", lambda v: v.update({'A': 0, 'B': 1, 'C': 0}) or None),
-    ("B AND A = 0\nC OR A = 1\nWhich equals 0?", lambda v: v.update({'A': 0, 'B': 1, 'C': 1}) or None),
-    ("C AND A = 0\nB OR C = 1\nWhich equals 0?", lambda v: v.update({'A': 0, 'B': 0, 'C': 1}) or None),
-    ("A AND B = 1\nA OR C = 0\nWhich equals 0?", lambda v: v.update({'A': 1, 'B': 1, 'C': 0}) or None),
-    ("B AND C = 1\nA OR B = 0\nWhich equals 0?", lambda v: v.update({'A': 0, 'B': 0, 'C': 1}) or None),
-    ("A OR B = 0\nA AND C = 1\nWhich equals 0?", lambda v: v.update({'A': 0, 'B': 0, 'C': 1}) or None),
+    {'A': 0, 'B': 1, 'C': 1},
+    {'A': 1, 'B': 0, 'C': 1},
+    {'A': 1, 'B': 1, 'C': 0},
 ]
 
 def generate_logic_puzzle() -> LogicPuzzle:
-    # 随机选择一个谜题模板
-    puzzle_template = random.choice(LOGIC_PUZZLES)
-    question = puzzle_template[0]
-    values = {}
-    puzzle_template[1](values)
+    values = random.choice(LOGIC_PUZZLES)
 
     equations = [
         f"A AND B = {values['A'] & values['B']}",
@@ -198,11 +186,9 @@ def generate_logic_puzzle() -> LogicPuzzle:
         f"B AND C = {values['B'] & values['C']}",
     ]
 
-    # 找出哪个是0
-    candidates = [v for v in ["A", "B", "C"] if values[v] == 0]
-    answer = random.choice(candidates)
+    answer = next(v for v in ["A", "B", "C"] if values[v] == 0)
 
-    return LogicPuzzle(question=question, answer=answer, equations=equations)
+    return LogicPuzzle(question="Which equals 0?", answer=answer, equations=equations)
 
 
 # LED
