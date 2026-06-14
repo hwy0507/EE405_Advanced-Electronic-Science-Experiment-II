@@ -683,6 +683,7 @@ class CreatureRescueGame(tk.Tk):
 
         # 时间记录
         self.game_start_time = None
+        self.game_elapsed_seconds = None
 
         # 扇形
         self.calibrated = False
@@ -1342,6 +1343,7 @@ class CreatureRescueGame(tk.Tk):
 
         # 计算通关时长
         elapsed = time.time() - self.game_start_time if self.game_start_time else 0
+        self.game_elapsed_seconds = elapsed
         minutes = int(elapsed // 60)
         seconds = int(elapsed % 60)
 
@@ -1358,6 +1360,7 @@ class CreatureRescueGame(tk.Tk):
         led_clear()
 
         elapsed = time.time() - self.game_start_time if self.game_start_time else 0
+        self.game_elapsed_seconds = elapsed
         minutes = int(elapsed // 60)
         seconds = int(elapsed % 60)
 
@@ -1377,7 +1380,9 @@ class CreatureRescueGame(tk.Tk):
                  font=("Microsoft YaHei", 32, "bold"),
                  fg=ACCENT_GREEN if won else ACCENT_RED, bg=BG_CARD).pack(pady=10)
 
-        elapsed = time.time() - self.game_start_time if self.game_start_time else 0
+        elapsed = self.game_elapsed_seconds
+        if elapsed is None:
+            elapsed = time.time() - self.game_start_time if self.game_start_time else 0
         minutes = int(elapsed // 60)
         seconds = int(elapsed % 60)
 
@@ -1397,6 +1402,7 @@ class CreatureRescueGame(tk.Tk):
         self.current_letter_idx = 0
         self.score = 0
         self.game_start_time = None
+        self.game_elapsed_seconds = None
         self.calibrated = False
         self.puzzle = None
         self.logic_puzzle_pool = []
