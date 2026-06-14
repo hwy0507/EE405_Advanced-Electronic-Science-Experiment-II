@@ -544,6 +544,10 @@ def make_logic_puzzle(puzzle: LogicPuzzleSpec) -> LogicPuzzle:
     )
 
 
+def normalize_final_answer(value: str) -> str:
+    return "".join(ch for ch in value.upper() if ch.isalnum())
+
+
 # LED
 def run_led_command(args) -> Tuple[bool, str]:
     script_path = Path(__file__).with_name("ws2812_letters_spi.py")
@@ -1139,16 +1143,22 @@ class CreatureRescueGame(tk.Tk):
 
         cam_card = self.make_card(self.content_frame)
         cam_card.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
-        tk.Label(cam_card, text="🎮 游戏进行中", font=("Microsoft YaHei", 18, "bold"), fg=ACCENT_YELLOW, bg=BG_CARD).pack(pady=10)
+
+        game_toolbar = tk.Frame(cam_card, bg=BG_CARD)
+        game_toolbar.pack(fill=tk.X, padx=10, pady=10)
+        tk.Label(game_toolbar, text="🎮 游戏进行中", font=("Microsoft YaHei", 18, "bold"),
+                 fg=ACCENT_YELLOW, bg=BG_CARD).pack(side=tk.LEFT)
+        self.make_btn(game_toolbar, "✅ 锁定并判定", self.on_confirm_position,
+                      ACCENT_GREEN, TEXT_PRIMARY, 12, 1).pack(side=tk.RIGHT)
+
         game_cam_frame = tk.Frame(cam_card, width=CAMERA_VIEW_SIZE[0], height=CAMERA_VIEW_SIZE[1], bg="#0d1117")
-        game_cam_frame.pack(pady=10, padx=10)
+        game_cam_frame.pack(pady=(0, 10), padx=10)
         game_cam_frame.pack_propagate(False)
         self.game_cam_label = tk.Label(game_cam_frame, text="游戏画面", font=("Microsoft YaHei", 14),
                                        fg=TEXT_SECONDARY, bg="#0d1117")
         self.game_cam_label.pack(fill=tk.BOTH, expand=True)
         self.word_progress_lbl = tk.Label(cam_card, text="", font=("Consolas", 20, "bold"), fg=ACCENT_GREEN, bg=BG_CARD)
         self.word_progress_lbl.pack(pady=10)
-        self.make_btn(cam_card, "✅ 锁定画面", self.on_confirm_position, ACCENT_GREEN, TEXT_PRIMARY, 14, 2).pack(pady=10, padx=20)
 
         info_card = self.make_card(self.content_frame)
         info_card.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(10, 0))
@@ -1175,7 +1185,7 @@ class CreatureRescueGame(tk.Tk):
         # 最终答案输入区
         final_frame = tk.Frame(info_card, bg="#2a1a3a", relief=tk.RAISED, bd=1)
         final_frame.pack(fill=tk.X, padx=15, pady=10)
-        tk.Label(final_frame, text="🔑 最终答案", font=("Microsoft YaHei", 14, "bold"), fg=ACCENT_YELLOW, bg="#2a1a3a").pack(pady=5)
+        tk.Label(final_frame, text="🔑 最终答案（颜色+动物名）", font=("Microsoft YaHei", 14, "bold"), fg=ACCENT_YELLOW, bg="#2a1a3a").pack(pady=5)
         self.final_answer_entry = tk.Entry(final_frame, font=("Microsoft YaHei", 16), bg="#1a0a2a", fg=ACCENT_GREEN,
                                            insertbackground=ACCENT_GREEN, relief=tk.FLAT, bd=5, justify=tk.CENTER)
         self.final_answer_entry.pack(pady=5, padx=10, fill=tk.X)
@@ -1188,6 +1198,7 @@ class CreatureRescueGame(tk.Tk):
         letter = self.animal_word[0]
         color = self.color_result if self.color_result else "green"
         led_ok, led_msg = led_show_letter(letter, color)
+        print(f"[FINAL_TEST] 最终口令={normalize_final_answer(color + self.animal_word)}", flush=True)
         self.reset_logic_puzzle_pool()
         self.generate_new_puzzle()
         self.start_shrink_timer()
@@ -1296,7 +1307,7 @@ class CreatureRescueGame(tk.Tk):
                 # 所有字母完成
                 self.update_word_display()
                 self.target_zone_lbl.config(text=f"✅ 正确！", fg=ACCENT_GREEN)
-                self.status_bar.config(text="✅ 所有字母完成！请输入最终答案！")
+                self.status_bar.config(text="✅ 所有字母完成！请输入颜色+动物名最终答案！")
             else:
                 letter = self.animal_word[self.current_letter_idx]
                 color = self.color_result if self.color_result else "green"
@@ -1314,11 +1325,13 @@ class CreatureRescueGame(tk.Tk):
 
     def on_submit_final_answer(self):
         """提交最终答案"""
-        user_answer = self.final_answer_entry.get().strip().upper()
-        if user_answer == self.animal_word:
+        user_answer = normalize_final_answer(self.final_answer_entry.get())
+        color = self.color_result if self.color_result else "green"
+        expected_answer = normalize_final_answer(color + self.animal_word)
+        if user_answer == expected_answer:
             self.on_game_win()
         else:
-            self.status_bar.config(text=f"❌ 答案错误！你输入了: {user_answer}，请根据已解锁字母重新尝试")
+            self.status_bar.config(text="❌ 答案错误！请按颜色+动物名重新尝试")
 
     def on_game_win(self):
         self.game_step = 5
