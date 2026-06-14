@@ -1065,16 +1065,22 @@ class CreatureRescueGame(tk.Tk):
     def _show_calibrate_screen(self):
         cam_card = self.make_card(self.content_frame)
         cam_card.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
-        tk.Label(cam_card, text="🎯 第三关：云台标定", font=("Microsoft YaHei", 18, "bold"), fg=ACCENT_PURPLE, bg=BG_CARD).pack(pady=10)
+
+        calib_toolbar = tk.Frame(cam_card, bg=BG_CARD)
+        calib_toolbar.pack(fill=tk.X, padx=10, pady=10)
+        tk.Label(calib_toolbar, text="🎯 第三关：云台标定", font=("Microsoft YaHei", 18, "bold"),
+                 fg=ACCENT_PURPLE, bg=BG_CARD).pack(side=tk.LEFT)
+        self.make_btn(calib_toolbar, "🎯 标定此位置", self.on_calibrate,
+                      ACCENT_PURPLE, TEXT_PRIMARY, 12, 1).pack(side=tk.RIGHT)
+
         calib_cam_frame = tk.Frame(cam_card, width=CAMERA_VIEW_SIZE[0], height=CAMERA_VIEW_SIZE[1], bg="#0d1117")
-        calib_cam_frame.pack(pady=10, padx=10)
+        calib_cam_frame.pack(pady=(0, 10), padx=10)
         calib_cam_frame.pack_propagate(False)
         self.calib_cam_label = tk.Label(calib_cam_frame, text="请将云台红色方块移到画面中央",
                                         font=("Microsoft YaHei", 14), fg=TEXT_SECONDARY, bg="#0d1117")
         self.calib_cam_label.pack(fill=tk.BOTH, expand=True)
         self.calib_status_lbl = tk.Label(cam_card, text="等待标定...", font=("Microsoft YaHei", 14), fg=TEXT_SECONDARY, bg=BG_CARD)
         self.calib_status_lbl.pack(pady=5)
-        self.make_btn(cam_card, "🎯 标定此位置", self.on_calibrate, ACCENT_PURPLE, TEXT_PRIMARY, 14, 2).pack(pady=10, padx=20)
 
         info_card = self.make_card(self.content_frame)
         info_card.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(10, 0))
@@ -1199,6 +1205,11 @@ class CreatureRescueGame(tk.Tk):
         if not self.logic_puzzle_pool:
             self.reset_logic_puzzle_pool()
         self.puzzle = make_logic_puzzle(self.logic_puzzle_pool.pop())
+        print(
+            f"[LOGIC_TEST] 题目 {self.puzzle.spec_id} | 目标值={self.puzzle.target_value} | "
+            f"答案扇形={self.puzzle.answer}",
+            flush=True,
+        )
         eq_text = "\n".join(self.puzzle.equations)
         self.puzzle_lbl.config(text=f"{eq_text}\n\n{self.puzzle.question}")
         self.target_zone_lbl.config(text="目标扇形: ???")
