@@ -39,6 +39,12 @@ except ImportError:
 FAN_SHRINK_INTERVAL = 4.0
 FAN_SHRINK_AMOUNT = 4.0
 MIN_FAN_HALF = 6.0
+DEFAULT_DIFFICULTY = "normal"
+DIFFICULTY_SETTINGS = {
+    "easy": {"label": "简单", "fan_half": 28.0, "shrink_interval": 5.0, "shrink_amount": 3.0},
+    "normal": {"label": "普通", "fan_half": 22.0, "shrink_interval": 4.0, "shrink_amount": 4.0},
+    "hard": {"label": "困难", "fan_half": 16.0, "shrink_interval": 3.0, "shrink_amount": 5.0},
+}
 
 LED_CONFIG = {"layout": "col", "rotate": "0", "flip_x": True, "brightness": "0.4"}
 
@@ -666,6 +672,9 @@ class CreatureRescueGame(tk.Tk):
         self.current_letter_idx = 0
         self.puzzle: Optional[LogicPuzzle] = None
         self.logic_puzzle_pool = []
+        self.difficulty_key = DEFAULT_DIFFICULTY
+        self.difficulty_buttons = {}
+        self.game_outcome = None
         self.score = 0
 
         # 时间记录
@@ -675,9 +684,13 @@ class CreatureRescueGame(tk.Tk):
         self.calibrated = False
         self.fan_origin: Optional[Tuple[int, int]] = None
         self.fan_axis = 0.0
-        self.fan_b_half = 22.0
-        self.fan_a_half = 22.0
-        self.fan_c_half = 22.0
+        difficulty = DIFFICULTY_SETTINGS[self.difficulty_key]
+        self.fan_b_half = difficulty["fan_half"]
+        self.fan_a_half = difficulty["fan_half"]
+        self.fan_c_half = difficulty["fan_half"]
+        self.fan_shrink_interval = difficulty["shrink_interval"]
+        self.fan_shrink_amount = difficulty["shrink_amount"]
+        self.min_fan_half = MIN_FAN_HALF
         self.fan_r_inner = 60.0
         self.fan_r_outer = 200.0
         self.fan_current_zone: Optional[str] = None
@@ -746,6 +759,48 @@ class CreatureRescueGame(tk.Tk):
                 lbl.config(fg=ACCENT_YELLOW, font=("Microsoft YaHei", 14, "bold"))
             else:
                 lbl.config(fg=TEXT_SECONDARY, font=("Microsoft YaHei", 13))
+
+    def set_step_status(self, step):
+        messages = {
+            0: "▶ 点击开始进入语音识别关卡",
+            1: "请通过语音唤醒颜色线索",
+            2: "请通过摄像头识别被困生灵",
+            3: "请完成云台标定，并选择游戏难度",
+            4: "请根据LED字母和逻辑题完成扇形解码",
+            5: "关卡结束",
+        }
+        self.status_bar.config(text=messages.get(step, ""))
+
+    def apply_difficulty_settings(self):
+        settings = DIFFICULTY_SETTINGS[self.difficulty_key]
+        self.fan_b_half = settings["fan_half"]
+        self.fan_a_half = settings["fan_half"]
+        self.fan_c_half = settings["fan_half"]
+        self.fan_shrink_interval = settings["shrink_interval"]
+        self.fan_shrink_amount = settings["shrink_amount"]
+        self.min_fan_half = MIN_FAN_HALF
+
+    def select_difficulty(self, key):
+        if key not in DIFFICULTY_SETTINGS:
+            return
+        self.difficulty_key = key
+        self.apply_difficulty_settings()
+        self.update_difficulty_buttons()
+        if hasattr(self, "difficulty_status_lbl") and self.difficulty_status_lbl.winfo_exists():
+            settings = DIFFICULTY_SETTINGS[key]
+            self.difficulty_status_lbl.config(
+                text=f"当前难度：{settings['label']} | 初始扇形 {settings['fan_half']:.0f}° | "
+                     f"{settings['shrink_interval']:.0f}s 缩小 {settings['shrink_amount']:.0f}°"
+            )
+
+    def update_difficulty_buttons(self):
+        for key, btn in self.difficulty_buttons.items():
+            selected = key == self.difficulty_key
+            btn.config(
+                bg=ACCENT_GREEN if selected else "#30363d",
+                fg=TEXT_PRIMARY if selected else TEXT_SECONDARY,
+                activebackground=ACCENT_GREEN if selected else "#30363d",
+            )
 
     def stop_camera(self):
         self.camera_running = False
@@ -832,6 +887,7 @@ class CreatureRescueGame(tk.Tk):
 
         self.game_step = step
         self.update_progress(step)
+        self.set_step_status(step)
 
         self.after(50, lambda: self._build_step_page(step))
 
@@ -925,8 +981,8 @@ class CreatureRescueGame(tk.Tk):
     def on_speech_result(self, color, text):
         if color:
             self.color_result = color
-            self.speech_result_lbl.config(text=f"识别成功：{color.upper()}", fg=ACCENT_GREEN)
-            self.status_bar.config(text=f"✅ 颜色识别完成：{color.upper()}")
+            self.speech_result_lbl.config(text="识别成功\n颜色线索已封存", fg=ACCENT_GREEN)
+            self.status_bar.config(text="✅ 颜色识别完成，线索已封存")
         else:
             self.speech_result_lbl.config(text=f"未识别到颜色\n尝试: {text[:20] if text else '无'}", fg=ACCENT_RED)
             self.btn_start.config(state=tk.NORMAL)
@@ -953,8 +1009,6 @@ class CreatureRescueGame(tk.Tk):
         self.captured_label.pack(pady=10, padx=10, fill=tk.BOTH, expand=True)
         self.animal_result_lbl = tk.Label(info_card, text="", font=("Microsoft YaHei", 20, "bold"), fg=TEXT_SECONDARY, bg=BG_CARD)
         self.animal_result_lbl.pack(pady=10)
-        if self.color_result:
-            tk.Label(info_card, text=f"已选颜色: {self.color_result.upper()}", font=("Microsoft YaHei", 14), fg=ACCENT_YELLOW, bg=BG_CARD).pack(pady=5)
         self.next_btn = self.make_btn(info_card, "➡️ 下一关", self.on_next_from_animal, ACCENT_BLUE, TEXT_PRIMARY, 14, 2)
         self.next_btn.pack(pady=15, padx=20)
 
@@ -995,8 +1049,8 @@ class CreatureRescueGame(tk.Tk):
         if detection:
             self.animal_result = detection.label.lower()
             self.animal_word = self.animal_result.upper()
-            self.animal_result_lbl.config(text=f"{self.animal_word}\n置信度: {detection.conf:.0%}", fg=ACCENT_GREEN)
-            self.status_bar.config(text=f"✅ 动物识别完成：{self.animal_word}")
+            self.animal_result_lbl.config(text=f"识别成功\n身份已封存\n置信度: {detection.conf:.0%}", fg=ACCENT_GREEN)
+            self.status_bar.config(text="✅ 动物识别完成，身份已封存")
         else:
             self.animal_result_lbl.config(text="未检测到动物", fg=ACCENT_RED)
             self.status_bar.config(text="⚠️ 未检测到动物，请重试")
@@ -1026,8 +1080,25 @@ class CreatureRescueGame(tk.Tk):
         info_card.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(10, 0))
         tk.Label(info_card, text="📋 标定说明", font=("Microsoft YaHei", 16, "bold"), fg=TEXT_PRIMARY, bg=BG_CARD).pack(pady=15)
         tk.Label(info_card, text="1. 将云台红色方块放到画面中央\n2. 点击「标定此位置」\n3. 系统将显示扇形划分", font=("Microsoft YaHei", 12), fg=TEXT_SECONDARY, bg=BG_CARD, justify=tk.LEFT).pack(pady=10, padx=20)
-        if self.animal_word:
-            tk.Label(info_card, text=f"目标单词: {self.animal_word}", font=("Microsoft YaHei", 14), fg=ACCENT_GREEN, bg=BG_CARD).pack(pady=10)
+
+        difficulty_frame = tk.Frame(info_card, bg=BG_CARD)
+        difficulty_frame.pack(fill=tk.X, padx=20, pady=12)
+        tk.Label(difficulty_frame, text="选择难度", font=("Microsoft YaHei", 14, "bold"),
+                 fg=ACCENT_YELLOW, bg=BG_CARD).pack(anchor=tk.W, pady=(0, 8))
+        difficulty_btn_frame = tk.Frame(difficulty_frame, bg=BG_CARD)
+        difficulty_btn_frame.pack(fill=tk.X)
+        self.difficulty_buttons = {}
+        for key, settings in DIFFICULTY_SETTINGS.items():
+            btn = self.make_btn(difficulty_btn_frame, settings["label"],
+                                lambda k=key: self.select_difficulty(k),
+                                "#30363d", TEXT_SECONDARY, 11, 1)
+            btn.pack(side=tk.LEFT, padx=(0, 8))
+            self.difficulty_buttons[key] = btn
+        self.difficulty_status_lbl = tk.Label(difficulty_frame, text="", font=("Microsoft YaHei", 11),
+                                              fg=TEXT_SECONDARY, bg=BG_CARD, justify=tk.LEFT)
+        self.difficulty_status_lbl.pack(anchor=tk.W, pady=(8, 0))
+        self.select_difficulty(self.difficulty_key)
+
         self.calib_next_btn = self.make_btn(info_card, "➡️ 开始游戏", lambda: self.show_step(4), ACCENT_GREEN, TEXT_PRIMARY, 14, 2)
         self.calib_next_btn.pack(pady=20, padx=20)
         self.calib_next_btn.config(state=tk.DISABLED)
@@ -1052,7 +1123,7 @@ class CreatureRescueGame(tk.Tk):
         self.calibrated = True
         self.calib_status_lbl.config(text=f"标定成功！B轴={self.fan_axis:.1f}°\n扇形已显示", fg=ACCENT_GREEN)
         self.calib_next_btn.config(state=tk.NORMAL)
-        self.status_bar.config(text="✅ 标定完成！扇形已显示，即将开始游戏")
+        self.status_bar.config(text="✅ 标定完成！请选择难度后开始游戏")
 
     # 游戏关卡
     def _show_game_screen(self):
@@ -1076,8 +1147,11 @@ class CreatureRescueGame(tk.Tk):
         info_card = self.make_card(self.content_frame)
         info_card.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(10, 0))
         tk.Label(info_card, text="📋 任务信息", font=("Microsoft YaHei", 16, "bold"), fg=TEXT_PRIMARY, bg=BG_CARD).pack(pady=10)
-        tk.Label(info_card, text=f"颜色: {self.color_result or '未知'}", font=("Microsoft YaHei", 14), fg=ACCENT_YELLOW, bg=BG_CARD).pack(pady=5)
-        tk.Label(info_card, text=f"动物: {self.animal_word}", font=("Microsoft YaHei", 14), fg=ACCENT_BLUE, bg=BG_CARD).pack(pady=5)
+        difficulty = DIFFICULTY_SETTINGS[self.difficulty_key]
+        tk.Label(info_card, text=f"难度: {difficulty['label']}", font=("Microsoft YaHei", 14),
+                 fg=ACCENT_YELLOW, bg=BG_CARD).pack(pady=5)
+        tk.Label(info_card, text="颜色线索与生灵身份已封存", font=("Microsoft YaHei", 12),
+                 fg=TEXT_SECONDARY, bg=BG_CARD).pack(pady=5)
 
         puzzle_frame = tk.Frame(info_card, bg="#1a2a3a", relief=tk.RAISED, bd=1)
         puzzle_frame.pack(fill=tk.X, padx=15, pady=10)
@@ -1113,7 +1187,7 @@ class CreatureRescueGame(tk.Tk):
         self.start_shrink_timer()
         self.update_word_display()
         if led_ok:
-            self.status_bar.config(text=f"LED显示字母 {letter}，请完成逻辑题")
+            self.status_bar.config(text="LED已显示当前字母，请完成逻辑题")
         else:
             self.status_bar.config(text=f"LED启动失败：{led_msg}")
 
@@ -1132,11 +1206,12 @@ class CreatureRescueGame(tk.Tk):
     def update_word_display(self):
         if not self.animal_word:
             return
-        progress = " ".join([self.animal_word[i] if i < self.current_letter_idx else (self.animal_word[i] if i == self.current_letter_idx else "_") for i in range(len(self.animal_word))])
-        self.word_progress_lbl.config(text=f"进度: {progress}")
+        total = len(self.animal_word)
+        current = min(self.current_letter_idx + 1, total)
+        self.word_progress_lbl.config(text=f"字母进度: {current}/{total}")
 
     def start_shrink_timer(self):
-        self.shrink_remaining = FAN_SHRINK_INTERVAL
+        self.shrink_remaining = self.fan_shrink_interval
         self.update_timer_display()
         def tick():
             if self.game_step != 4:
@@ -1145,20 +1220,21 @@ class CreatureRescueGame(tk.Tk):
             self.update_timer_display()
             if self.shrink_remaining <= 0:
                 self.shrink_fans()
-                self.shrink_remaining = FAN_SHRINK_INTERVAL
+                self.shrink_remaining = self.fan_shrink_interval
             self.shrink_timer = self.after(100, tick)
         self.shrink_timer = self.after(100, tick)
 
     def update_timer_display(self):
-        bars = int(self.shrink_remaining / FAN_SHRINK_INTERVAL * 10)
+        bars = int(self.shrink_remaining / self.fan_shrink_interval * 10)
         bar_str = "█" * bars + "░" * (10 - bars)
         self.timer_lbl.config(text=f"缩小倒计时: {bar_str} {self.shrink_remaining:.1f}s")
 
     def shrink_fans(self):
-        if self.fan_b_half > MIN_FAN_HALF:
-            self.fan_b_half -= FAN_SHRINK_AMOUNT
-            self.fan_a_half -= FAN_SHRINK_AMOUNT
-            self.fan_c_half -= FAN_SHRINK_AMOUNT
+        if self.fan_b_half > self.min_fan_half:
+            new_half = max(self.min_fan_half, self.fan_b_half - self.fan_shrink_amount)
+            self.fan_b_half = new_half
+            self.fan_a_half = new_half
+            self.fan_c_half = new_half
             self.status_bar.config(text=f"⚠️ 扇形缩小！当前: {self.fan_b_half:.0f}°")
         else:
             self.on_game_over()
@@ -1207,6 +1283,7 @@ class CreatureRescueGame(tk.Tk):
             self.current_letter_idx += 1
             if self.current_letter_idx >= len(self.animal_word):
                 # 所有字母完成
+                self.update_word_display()
                 self.target_zone_lbl.config(text=f"✅ 正确！", fg=ACCENT_GREEN)
                 self.status_bar.config(text="✅ 所有字母完成！请输入最终答案！")
             else:
@@ -1217,7 +1294,7 @@ class CreatureRescueGame(tk.Tk):
                 self.update_word_display()
                 self.start_shrink_timer()
                 if led_ok:
-                    self.status_bar.config(text=f"正确！LED显示字母 {letter}（剩余题目: {len(self.logic_puzzle_pool)}）")
+                    self.status_bar.config(text=f"正确！LED已显示下一个字母（剩余题目: {len(self.logic_puzzle_pool)}）")
                 else:
                     self.status_bar.config(text=f"正确，但LED失败：{led_msg}")
         else:
@@ -1230,10 +1307,11 @@ class CreatureRescueGame(tk.Tk):
         if user_answer == self.animal_word:
             self.on_game_win()
         else:
-            self.status_bar.config(text=f"❌ 答案错误！你输入了: {user_answer}, 正确答案是: {self.animal_word}")
+            self.status_bar.config(text=f"❌ 答案错误！你输入了: {user_answer}，请根据已解锁字母重新尝试")
 
     def on_game_win(self):
         self.game_step = 5
+        self.game_outcome = "win"
         if self.shrink_timer:
             self.after_cancel(self.shrink_timer)
         led_clear()
@@ -1244,12 +1322,13 @@ class CreatureRescueGame(tk.Tk):
         seconds = int(elapsed % 60)
 
         self.target_zone_lbl.config(text=f"🎉 恭喜通关！", fg=ACCENT_GREEN)
-        self.puzzle_lbl.config(text=f"单词: {self.animal_word}\n用时: {minutes}分{seconds}秒")
+        self.puzzle_lbl.config(text=f"生灵解放成功\n用时: {minutes}分{seconds}秒")
         self.status_bar.config(text=f"🎊 游戏胜利！用时 {minutes}分{seconds}秒")
         self.after(5000, lambda: self.show_step(5))
 
     def on_game_over(self):
         self.game_step = 5
+        self.game_outcome = "fail"
         if self.shrink_timer:
             self.after_cancel(self.shrink_timer)
         led_clear()
@@ -1259,22 +1338,27 @@ class CreatureRescueGame(tk.Tk):
         seconds = int(elapsed % 60)
 
         self.target_zone_lbl.config(text=f"⏰ 时间到！", fg=ACCENT_RED)
-        self.puzzle_lbl.config(text=f"单词: {self.animal_word}\n用时: {minutes}分{seconds}秒")
+        self.puzzle_lbl.config(text=f"解放失败\n用时: {minutes}分{seconds}秒")
         self.status_bar.config(text=f"⏰ 游戏结束！用时 {minutes}分{seconds}秒")
         self.after(3000, lambda: self.show_step(5))
 
     # 胜利界面
     def _show_win_screen(self):
+        won = self.game_outcome != "fail"
         card = self.make_card(self.content_frame)
         card.pack(expand=True)
-        tk.Label(card, text="🎉", font=("Arial", 60), fg=ACCENT_GREEN, bg=BG_CARD).pack(pady=20)
-        tk.Label(card, text="生灵获救！", font=("Microsoft YaHei", 32, "bold"), fg=ACCENT_GREEN, bg=BG_CARD).pack(pady=10)
+        tk.Label(card, text="🎉" if won else "⏰", font=("Arial", 60),
+                 fg=ACCENT_GREEN if won else ACCENT_RED, bg=BG_CARD).pack(pady=20)
+        tk.Label(card, text="生灵获救！" if won else "解放失败",
+                 font=("Microsoft YaHei", 32, "bold"),
+                 fg=ACCENT_GREEN if won else ACCENT_RED, bg=BG_CARD).pack(pady=10)
 
         elapsed = time.time() - self.game_start_time if self.game_start_time else 0
         minutes = int(elapsed // 60)
         seconds = int(elapsed % 60)
 
-        tk.Label(card, text=f"单词: {self.animal_word}", font=("Microsoft YaHei", 20), fg=TEXT_PRIMARY, bg=BG_CARD).pack(pady=10)
+        summary = "最终密码已验证" if won else "最终密码未能解锁"
+        tk.Label(card, text=summary, font=("Microsoft YaHei", 20), fg=TEXT_PRIMARY, bg=BG_CARD).pack(pady=10)
         tk.Label(card, text=f"通关用时: {minutes}分{seconds}秒", font=("Microsoft YaHei", 18, "bold"), fg=ACCENT_YELLOW, bg=BG_CARD).pack(pady=20)
         btn_frame = tk.Frame(card, bg=BG_CARD)
         btn_frame.pack(pady=30)
@@ -1293,9 +1377,9 @@ class CreatureRescueGame(tk.Tk):
         self.puzzle = None
         self.logic_puzzle_pool = []
         self.fan_current_zone = None
-        self.fan_b_half = 22.0
-        self.fan_a_half = 22.0
-        self.fan_c_half = 22.0
+        self.game_outcome = None
+        self.difficulty_key = DEFAULT_DIFFICULTY
+        self.apply_difficulty_settings()
         if self.shrink_timer:
             self.after_cancel(self.shrink_timer)
         self.stop_camera()
