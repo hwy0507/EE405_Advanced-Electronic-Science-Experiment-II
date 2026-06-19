@@ -56,8 +56,7 @@ The pan-tilt device is not directly driven by the Orange Pi. The player moves it
 - `creature_rescue_game.py`: main GUI and stage state machine
 - `speech_color.py`: offline Chinese color recognition using Vosk
 - `ws2812_letters_spi.py`: SPI-driven WS2812 letter display
-- `detect_animals17_triggered.py`: ONNX-based animal detector release copy
-- `animal_demo/detect_animals17_triggered.py`: compatibility copy currently used by the GUI import path
+- `detect_animals17_triggered.py`: ONNX-based animal detector
 - `model_artifacts/deploy_pack_20260507/animals17_best.onnx`: deployed detector
 - `model_artifacts/deploy_pack_20260507/labels.txt`: detector labels
 
@@ -71,8 +70,6 @@ The pan-tilt device is not directly driven by the Orange Pi. The player moves it
 |-- detect_animals17_triggered.py
 |-- requirements.txt
 |-- run_multimodal_orangepi.sh
-|-- animal_demo/
-|   `-- detect_animals17_triggered.py
 `-- model_artifacts/
     `-- deploy_pack_20260507/
         |-- animals17_best.onnx

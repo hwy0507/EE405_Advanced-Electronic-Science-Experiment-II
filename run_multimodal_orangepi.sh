@@ -23,9 +23,6 @@ if [ -f "$MODEL_DEFAULT" ] && [ -f "$LABELS_DEFAULT" ]; then
 elif [ -f "$HOME/animal_yolo_demo/models/animals17_best.onnx" ] && [ -f "$HOME/animal_yolo_demo/models/labels.txt" ]; then
   MODEL_DEFAULT="$HOME/animal_yolo_demo/models/animals17_best.onnx"
   LABELS_DEFAULT="$HOME/animal_yolo_demo/models/labels.txt"
-elif [ -f "$HOME/animal_demo/models/animals17_best.onnx" ] && [ -f "$HOME/animal_demo/models/labels.txt" ]; then
-  MODEL_DEFAULT="$HOME/animal_demo/models/animals17_best.onnx"
-  LABELS_DEFAULT="$HOME/animal_demo/models/labels.txt"
 else
   MODEL_DEFAULT="$HOME/animals17_release_latest/models/animals17_best.onnx"
   LABELS_DEFAULT="$HOME/animals17_release_latest/models/labels.txt"

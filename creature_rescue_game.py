@@ -592,7 +592,7 @@ def led_clear() -> Tuple[bool, str]:
 # 动物检测
 class YoloDetector:
     def __init__(self, model_path: str, labels_path: str, conf: float = 0.35):
-        from animal_demo.detect_animals17_triggered import YoloDetector as _Orig
+        from detect_animals17_triggered import YoloDetector as _Orig
         self._detector = _Orig(model_path=Path(model_path), labels_path=Path(labels_path),
                                conf_thres=conf, iou_thres=0.45, det_size=640, threads=2, ort_opt="basic")
 
