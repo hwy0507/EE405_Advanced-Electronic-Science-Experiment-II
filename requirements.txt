@@ -1,0 +1,7 @@
+numpy>=1.24.0
+opencv-python-headless>=4.8.0
+Pillow>=10.0.0
+sounddevice>=0.4.6
+vosk>=0.3.45
+onnxruntime>=1.16.0
+spidev>=3.6
